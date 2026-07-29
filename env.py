@@ -80,9 +80,6 @@ class CrosswordsEnvironment(Environment):
             return str(last)
         return str(observation)
 
-    def _map_reward(self, raw):
-        return max(0.0, min(1.0, (raw + 1.0) / 2.0))
-
     async def get_prompt(self):
         self.ta_env.reset(num_players=1, seed=self.config.seed)
         _, obs = self.ta_env.get_observation()
@@ -114,8 +111,13 @@ Use the clues to determine the correct letters."""
         if done:
             self.game_done = True
             rewards, game_info = self.ta_env.close()
-            raw = rewards.get(0, 0.0) if isinstance(rewards, dict) else float(rewards)
-            reward = self._map_reward(raw)
+            # TextArena's Crosswords already returns a reward in [0, 1] (1.0 on a
+            # completed puzzle, otherwise a continuous filled_letter_cells /
+            # total_letter_cells fraction), so pass it through unchanged rather
+            # than remapping an already-normalised value through (raw + 1) / 2,
+            # which compressed every outcome into [0.5, 1.0] and paid a fully
+            # failed attempt 0.5.
+            reward = rewards.get(0, 0.0) if isinstance(rewards, dict) else float(rewards)
 
             reason = ""
             if isinstance(game_info, dict) and 0 in game_info:
